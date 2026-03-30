@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Assistant</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f5; --surface: #fff; --border: #e0e0e0;
+    --primary: #2563eb; --primary-hover: #1d4ed8;
+    --danger: #dc2626; --success: #16a34a; --warning: #d97706;
+    --text: #111; --muted: #6b7280; --radius: 8px;
+  }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  a { color: var(--primary); text-decoration: none; }
+
+  /* Layout */
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 8px; height: 52px; }
+  nav h1 { font-size: 16px; font-weight: 700; margin-right: 16px; }
+  .tab-btn { padding: 6px 14px; border-radius: var(--radius); border: none; background: none; cursor: pointer; font-size: 14px; color: var(--muted); }
+  .tab-btn.active { background: var(--primary); color: #fff; }
+  .content { flex: 1; overflow: auto; padding: 24px; }
+
+  /* Cards & Panels */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .panel { display: flex; gap: 16px; height: calc(100vh - 100px); }
+  .panel-left { width: 320px; flex-shrink: 0; overflow-y: auto; }
+  .panel-right { flex: 1; overflow-y: auto; }
+
+  /* Buttons */
+  .btn { padding: 7px 14px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Forms */
+  .form-group { margin-bottom: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface); }
+  textarea { resize: vertical; min-height: 80px; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+
+  /* Status badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+  .badge-pending { background: #fef3c7; color: #92400e; }
+  .badge-running { background: #dbeafe; color: #1e40af; }
+  .badge-done { background: #dcfce7; color: #14532d; }
+  .badge-failed { background: #fee2e2; color: #7f1d1d; }
+  .badge-cancelled { background: #f3f4f6; color: #374151; }
+
+  /* Meeting list item */
+  .meeting-item { padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 8px; cursor: pointer; background: var(--surface); }
+  .meeting-item:hover { border-color: var(--primary); }
+  .meeting-item.active { border-color: var(--primary); background: #eff6ff; }
+  .meeting-item h3 { font-size: 14px; font-weight: 600; }
+  .meeting-item small { color: var(--muted); font-size: 12px; }
+
+  /* Tabs inside panel */
+  .inner-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .inner-tab { padding: 8px 14px; border: none; background: none; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .inner-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+  /* Misc */
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 32px; }
+  .pre { white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6; background: var(--bg); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); max-height: 400px; overflow-y: auto; }
+  .task-bar { padding: 8px 12px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 480px; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin-bottom: 16px; font-size: 16px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .tag { display: inline-block; background: #e0e7ff; color: #3730a3; border-radius: 4px; padding: 2px 6px; font-size: 11px; margin: 2px; }
+  .chip-input { display: flex; flex-wrap: wrap; gap: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px; }
+  .chip-input input { border: none; outline: none; flex: 1; min-width: 80px; padding: 2px 4px; }
+  .prompt-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+  .prompt-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .prompt-card .scene { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <h1>Meeting Assistant</h1>
+    <button class="tab-btn active" onclick="showTab('meetings')">Meetings</button>
+    <button class="tab-btn" onclick="showTab('prompts')">Prompts</button>
+    <button class="tab-btn" onclick="showTab('aggregations')">Aggregations</button>
+    <button class="tab-btn" onclick="showTab('settings')">Settings</button>
+  </nav>
+  <div class="content">
+    <div id="tab-meetings"></div>
+    <div id="tab-prompts" style="display:none"></div>
+    <div id="tab-aggregations" style="display:none"></div>
+    <div id="tab-settings" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const API = ''  // same origin
+
+// ── Config (localStorage) ──────────────────────────────────────────────────
+function getCfg() {
+  return {
+    stt_url: localStorage.getItem('cfg_stt_url') || '',
+    llm_base_url: localStorage.getItem('cfg_llm_url') || '',
+    llm_model: localStorage.getItem('cfg_llm_model') || '',
+    llm_api_key: localStorage.getItem('cfg_llm_key') || '',
+  }
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+async function api(method, path, body, isForm) {
+  const opts = { method, headers: {} }
+  if (body && !isForm) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body) }
+  if (body && isForm) opts.body = body
+  const r = await fetch(API + path, opts)
+  if (r.status === 204) return null
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(data.detail || r.statusText)
+  return data
+}
+
+function badge(status) {
+  return `<span class="badge badge-${status}">${status}</span>`
+}
+
+function modal(html, onClose) {
+  const ov = document.createElement('div')
+  ov.className = 'modal-overlay'
+  ov.innerHTML = `<div class="modal">${html}</div>`
+  ov.addEventListener('click', e => { if (e.target === ov) { ov.remove(); onClose?.() } })
+  document.body.appendChild(ov)
+  return ov
+}
+
+function showTab(name) {
+  ['meetings','prompts','aggregations','settings'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display = t === name ? '' : 'none'
+  })
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', ['meetings','prompts','aggregations','settings'][i] === name)
+  })
+  if (name === 'meetings') renderMeetings()
+  if (name === 'prompts') renderPrompts()
+  if (name === 'aggregations') renderAggregations()
+  if (name === 'settings') renderSettings()
+}
+
+function watchTask(taskId, onUpdate) {
+  const es = new EventSource(`${API}/tasks/${taskId}/stream`)
+  es.onmessage = e => {
+    const task = JSON.parse(e.data)
+    onUpdate(task)
+    if (['done','failed','cancelled'].includes(task.status)) es.close()
+  }
+  es.onerror = () => es.close()
+  return es
+}
+
+// ── Meetings Tab ───────────────────────────────────────────────────────────
+let selectedMeeting = null
+
+async function renderMeetings() {
+  const el = document.getElementById('tab-meetings')
+  el.innerHTML = '<div class="panel"><div class="panel-left" id="meeting-list"></div><div class="panel-right" id="meeting-detail"><div class="empty">選擇一個會議或新增會議</div></div></div>'
+  await loadMeetingList()
+}
+
+async function loadMeetingList() {
+  const el = document.getElementById('meeting-list')
+  const meetings = await api('GET', '/meetings')
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      <span class="section-title" style="flex:1">會議列表</span>
+      <button class="btn btn-primary btn-sm" onclick="openCreateMeeting()">+ 新增</button>
+    </div>
+    ${meetings.length ? meetings.map(m => `
+      <div class="meeting-item ${selectedMeeting?.id === m.id ? 'active' : ''}" onclick="selectMeeting(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+        <h3>${m.title}</h3>
+        <small>${m.date} · ${m.language}</small>
+      </div>`).join('') : '<div class="empty">尚無會議</div>'}
+  `
+}
+
+function openCreateMeeting() {
+  const ov = modal(`
+    <h2>新增會議</h2>
+    <div class="form-group"><label>標題（選填）</label><input id="m-title" placeholder="自動以日期命名"></div>
+    <div class="form-group"><label>日期（選填）</label><input id="m-date" type="date"></div>
+    <div class="form-group"><label>語言</label>
+      <select id="m-lang"><option value="zh">中文</option><option value="en">English</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="createMeeting()">建立</button>
+    </div>
+  `)
+}
+
+async function createMeeting() {
+  const title = document.getElementById('m-title').value.trim() || null
+  const date = document.getElementById('m-date').value || null
+  const language = document.getElementById('m-lang').value
+  try {
+    const m = await api('POST', '/meetings', { title, date, language })
+    document.querySelector('.modal-overlay')?.remove()
+    selectedMeeting = m
+    await loadMeetingList()
+    selectMeeting(m)
+  } catch(e) { alert(e.message) }
+}
+
+async function selectMeeting(m) {
+  selectedMeeting = m
+  await loadMeetingList()
+  const el = document.getElementById('meeting-detail')
+  el.innerHTML = renderMeetingDetail(m)
+  loadMeetingDetail(m.id)
+}
+
+function renderMeetingDetail(m) {
+  return `
+    <div class="row" style="margin-bottom:16px">
+      <div style="flex:1">
+        <h2 style="font-size:18px">${m.title}</h2>
+        <small style="color:var(--muted)">${m.date} · ${m.language}</small>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="openEditMeeting()">編輯</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteMeeting('${m.id}')">刪除</button>
+    </div>
+    <div class="inner-tabs">
+      <button class="inner-tab active" onclick="switchInnerTab('audio',this)">音檔</button>
+      <button class="inner-tab" onclick="switchInnerTab('transcript',this)">逐字稿</button>
+      <button class="inner-tab" onclick="switchInnerTab('summary',this)">摘要</button>
+      <button class="inner-tab" onclick="switchInnerTab('tasks',this)">任務</button>
+    </div>
+    <div id="inner-audio"></div>
+    <div id="inner-transcript" style="display:none"></div>
+    <div id="inner-summary" style="display:none"></div>
+    <div id="inner-tasks" style="display:none"></div>
+  `
+}
+
+async function loadMeetingDetail(meetingId) {
+  renderAudioTab(meetingId)
+}
+
+function switchInnerTab(name, btn) {
+  ['audio','transcript','summary','tasks'].forEach(t => {
+    document.getElementById(`inner-${t}`).style.display = t === name ? '' : 'none'
+  })
+  document.querySelectorAll('.inner-tab').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  if (name === 'transcript') renderTranscriptTab(selectedMeeting.id)
+  if (name === 'summary') renderSummaryTab(selectedMeeting.id)
+  if (name === 'tasks') renderTasksTab(selectedMeeting.id)
+}
+
+// Audio tab
+function renderAudioTab(meetingId) {
+  document.getElementById('inner-audio').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn btn-primary btn-sm" id="mode-audio-btn" onclick="switchInputMode('audio','${meetingId}')">上傳音檔</button>
+      <button class="btn btn-outline btn-sm" id="mode-text-btn" onclick="switchInputMode('text','${meetingId}')">輸入逐字稿</button>
+    </div>
+    <div id="input-mode-audio">
+      <div class="card">
+        <div class="form-group"><label>音檔</label><input type="file" id="audio-file" accept="audio/*"></div>
+        <div class="form-group"><label>語言</label>
+          <select id="audio-lang"><option value="zh">中文</option><option value="en">English</option></select>
+        </div>
+        <button class="btn btn-primary" onclick="uploadAudio('${meetingId}')">上傳並轉錄</button>
+      </div>
+      <div id="audio-task-status"></div>
+    </div>
+    <div id="input-mode-text" style="display:none">
+      <div class="card">
+        <div class="form-group"><label>語言</label>
+          <select id="text-lang"><option value="zh">中文</option><option value="en">English</option></select>
+        </div>
+        <div class="form-group"><label>逐字稿內容</label>
+          <textarea id="transcript-text" style="min-height:200px" placeholder="貼上或輸入逐字稿..."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="submitTranscriptText('${meetingId}')">送出逐字稿</button>
+      </div>
+      <div id="text-submit-status"></div>
+    </div>
+  `
+}
+
+function switchInputMode(mode, meetingId) {
+  document.getElementById('input-mode-audio').style.display = mode === 'audio' ? '' : 'none'
+  document.getElementById('input-mode-text').style.display = mode === 'text' ? '' : 'none'
+  document.getElementById('mode-audio-btn').className = `btn btn-sm ${mode === 'audio' ? 'btn-primary' : 'btn-outline'}`
+  document.getElementById('mode-text-btn').className = `btn btn-sm ${mode === 'text' ? 'btn-primary' : 'btn-outline'}`
+}
+
+async function submitTranscriptText(meetingId) {
+  const text = document.getElementById('transcript-text').value.trim()
+  if (!text) return alert('請輸入逐字稿內容')
+  const language = document.getElementById('text-lang').value
+  const el = document.getElementById('text-submit-status')
+  try {
+    await api('POST', `/meetings/${meetingId}/transcript`, { text, language })
+    el.innerHTML = `<div class="task-bar" style="margin-top:8px;color:var(--success)">✓ 逐字稿已儲存，可切換到「摘要」頁生成摘要</div>`
+  } catch(e) { alert(e.message) }
+}
+
+async function uploadAudio(meetingId) {
+  const file = document.getElementById('audio-file').files[0]
+  if (!file) return alert('請選擇音檔')
+  const lang = document.getElementById('audio-lang').value
+  const cfg = getCfg()
+  const form = new FormData()
+  form.append('audio', file)
+  let qs = `language=${lang}`
+  if (cfg.stt_url) qs += `&stt_url=${encodeURIComponent(cfg.stt_url)}`
+  try {
+    const res = await api('POST', `/meetings/${meetingId}/audio?${qs}`, form, true)
+    const el = document.getElementById('audio-task-status')
+    el.innerHTML = `<div class="task-bar">轉錄任務已送出 ${badge('pending')} <span id="stt-status"></span></div>`
+    watchTask(res.task_id, task => {
+      document.getElementById('stt-status').innerHTML = badge(task.status) + (task.error ? ` ${task.error}` : '')
+    })
+  } catch(e) { alert(e.message) }
+}
+
+// Transcript tab
+async function renderTranscriptTab(meetingId) {
+  const el = document.getElementById('inner-transcript')
+  el.innerHTML = '<div class="empty">載入中...</div>'
+  try {
+    const t = await api('GET', `/meetings/${meetingId}/transcript`)
+    el.innerHTML = `
+      <div class="section-title">原始逐字稿</div>
+      <div class="pre">${t.raw || '（尚未生成）'}</div>
+      <hr class="divider">
+      <div class="row" style="margin-bottom:10px">
+        <span class="section-title" style="flex:1">校正後逐字稿</span>
+        <button class="btn btn-outline btn-sm" onclick="openCorrectDialog('${meetingId}')">重新校正</button>
+        <button class="btn btn-outline btn-sm" onclick="openManualEdit('${meetingId}', \`${(t.corrected||'').replace(/`/g,'\\`')}\`)">手動編輯</button>
+      </div>
+      <div class="pre" id="corrected-text">${t.corrected || '（尚未校正）'}</div>
+      <div id="correct-task-status"></div>
+    `
+  } catch(e) {
+    el.innerHTML = `<div class="empty">${e.message}</div>`
+  }
+}
+
+function openCorrectDialog(meetingId) {
+  const ov = modal(`
+    <h2>校正逐字稿</h2>
+    <div class="form-group">
+      <label>自訂專有名詞（每行一個，格式：錯誤詞=正確詞）</label>
+      <textarea id="correct-terms" placeholder="克文=Qwen&#10;哈金費斯=Hugging Face"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="startCorrection('${meetingId}')">開始校正</button>
+    </div>
+  `)
+}
+
+async function startCorrection(meetingId) {
+  const raw = document.getElementById('correct-terms').value
+  const terms = {}
+  raw.split('\n').forEach(line => {
+    const [k, v] = line.split('=')
+    if (k && v) terms[k.trim()] = v.trim()
+  })
+  document.querySelector('.modal-overlay')?.remove()
+  const cfg = getCfg()
+  const body = { terms }
+  if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
+  if (cfg.llm_model) body.llm_model = cfg.llm_model
+  if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key
+  try {
+    const res = await api('POST', `/meetings/${meetingId}/correct`, body)
+    const el = document.getElementById('correct-task-status')
+    if (el) {
+      el.innerHTML = `<div class="task-bar" style="margin-top:8px">校正中 ${badge('running')} <span id="corr-status"></span></div>`
+      watchTask(res.task_id, task => {
+        document.getElementById('corr-status').innerHTML = badge(task.status)
+        if (task.status === 'done') renderTranscriptTab(meetingId)
+      })
+    }
+  } catch(e) { alert(e.message) }
+}
+
+function openManualEdit(meetingId, current) {
+  const ov = modal(`
+    <h2>手動編輯校正逐字稿</h2>
+    <div class="form-group"><textarea id="manual-text" style="min-height:200px">${current}</textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="saveManualEdit('${meetingId}')">儲存</button>
+    </div>
+  `)
+}
+
+async function saveManualEdit(meetingId) {
+  const corrected = document.getElementById('manual-text').value
+  try {
+    await api('PUT', `/meetings/${meetingId}/transcript`, { corrected })
+    document.querySelector('.modal-overlay')?.remove()
+    renderTranscriptTab(meetingId)
+  } catch(e) { alert(e.message) }
+}
+
+// Summary tab
+async function renderSummaryTab(meetingId) {
+  const el = document.getElementById('inner-summary')
+  el.innerHTML = '<div class="empty">載入中...</div>'
+  try {
+    const [summaries, prompts] = await Promise.all([
+      api('GET', `/meetings/${meetingId}/summaries`),
+      api('GET', '/prompts'),
+    ])
+    const customPrompts = prompts.filter(p => !p.is_builtin)
+    const builtinScenes = prompts.filter(p => p.is_builtin)
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">生成摘要</div>
+        <div class="form-group"><label>場景</label>
+          <select id="sum-scene">
+            ${builtinScenes.map(p => `<option value="${p.scene}">${p.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>自訂 Prompt（選填）</label>
+          <select id="sum-prompt-id">
+            <option value="">— 使用場景預設 —</option>
+            ${customPrompts.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>與會者（逗號分隔，選填）</label>
+          <input id="sum-participants" placeholder="Alice, Bob">
+        </div>
+        <div class="form-group"><label>議題（逗號分隔，選填）</label>
+          <input id="sum-topics" placeholder="進度更新, 問題討論">
+        </div>
+        <button class="btn btn-primary" onclick="startSummary('${meetingId}')">生成摘要</button>
+        <div id="summary-task-status"></div>
+      </div>
+      <div class="section-title" style="margin:16px 0 10px">歷史摘要（${summaries.length}）</div>
+      ${summaries.length ? summaries.map(s => {
+        const cacheKey = `sum_${s.id}`
+        _dlCache[cacheKey] = { content: s.content, filename: `${selectedMeeting.title}_${selectedMeeting.date}.md` }
+        return `
+        <div class="card" style="margin-bottom:10px">
+          <div class="row" style="margin-bottom:8px">
+            <small style="color:var(--muted);flex:1">${s.created_at.slice(0,19).replace('T',' ')}</small>
+            <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSummary('${meetingId}','${s.id}')">刪除</button>
+          </div>
+          <div class="pre">${s.content}</div>
+        </div>`
+      }).join('') : '<div class="empty">尚無摘要</div>'}
+    `
+  } catch(e) {
+    el.innerHTML = `<div class="empty">${e.message}</div>`
+  }
+}
+
+async function startSummary(meetingId) {
+  const scene = document.getElementById('sum-scene').value
+  const promptId = document.getElementById('sum-prompt-id').value || null
+  const participants = document.getElementById('sum-participants').value.split(',').map(s=>s.trim()).filter(Boolean)
+  const topics = document.getElementById('sum-topics').value.split(',').map(s=>s.trim()).filter(Boolean)
+  const cfg = getCfg()
+  const body = { scene, prompt_id: promptId, participants, topics }
+  if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
+  if (cfg.llm_model) body.llm_model = cfg.llm_model
+  if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key
+  try {
+    const res = await api('POST', `/meetings/${meetingId}/summarize`, body)
+    const el = document.getElementById('summary-task-status')
+    el.innerHTML = `<div class="task-bar" style="margin-top:8px">摘要生成中 <span id="sum-status">${badge('pending')}</span></div>`
+    watchTask(res.task_id, task => {
+      document.getElementById('sum-status').innerHTML = badge(task.status) + (task.error ? ` ${task.error}` : '')
+      if (task.status === 'done') renderSummaryTab(meetingId)
+    })
+  } catch(e) { alert(e.message) }
+}
+
+async function deleteSummary(meetingId, summaryId) {
+  if (!confirm('確定刪除這筆摘要？')) return
+  try {
+    await api('DELETE', `/meetings/${meetingId}/summaries/${summaryId}`)
+    renderSummaryTab(meetingId)
+  } catch(e) { alert(e.message) }
+}
+
+// Tasks tab
+async function renderTasksTab(meetingId) {
+  const el = document.getElementById('inner-tasks')
+  el.innerHTML = '<div class="empty">載入中...</div>'
+  try {
+    const tasks = await api('GET', `/tasks?meeting_id=${meetingId}`)
+    el.innerHTML = `
+      <div class="section-title" style="margin-bottom:10px">任務紀錄（${tasks.length}）</div>
+      ${tasks.length ? tasks.map(t => `
+        <div class="task-bar" style="flex-wrap:wrap;gap:6px">
+          <span style="font-weight:600">${t.task_type}</span>
+          ${badge(t.status)}
+          <span style="color:var(--muted);font-size:11px;flex:1">${t.created_at.slice(0,19).replace('T',' ')}</span>
+          ${['pending','running'].includes(t.status) ? `<button class="btn btn-danger btn-sm" onclick="cancelTask('${t.id}','${meetingId}')">取消</button>` : ''}
+          ${t.error ? `<div style="width:100%;color:var(--danger);font-size:12px">${t.error}</div>` : ''}
+        </div>`).join('') : '<div class="empty">尚無任務</div>'}
+    `
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>` }
+}
+
+async function cancelTask(taskId, meetingId) {
+  try {
+    await api('POST', `/tasks/${taskId}/cancel`)
+    renderTasksTab(meetingId)
+  } catch(e) { alert(e.message) }
+}
+
+// Edit / Delete meeting
+function openEditMeeting() {
+  const m = selectedMeeting
+  const ov = modal(`
+    <h2>編輯會議</h2>
+    <div class="form-group"><label>標題</label><input id="edit-title" value="${m.title}"></div>
+    <div class="form-group"><label>日期</label><input id="edit-date" type="date" value="${m.date}"></div>
+    <div class="form-group"><label>語言</label>
+      <select id="edit-lang"><option value="zh" ${m.language==='zh'?'selected':''}>中文</option><option value="en" ${m.language==='en'?'selected':''}>English</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="updateMeeting('${m.id}')">儲存</button>
+    </div>
+  `)
+}
+
+async function updateMeeting(meetingId) {
+  const title = document.getElementById('edit-title').value.trim()
+  const date = document.getElementById('edit-date').value
+  const language = document.getElementById('edit-lang').value
+  try {
+    const m = await api('PUT', `/meetings/${meetingId}`, { title, date, language })
+    document.querySelector('.modal-overlay')?.remove()
+    selectedMeeting = m
+    await loadMeetingList()
+    document.querySelector('.panel-right').querySelector('h2').textContent = m.title
+  } catch(e) { alert(e.message) }
+}
+
+async function deleteMeeting(meetingId) {
+  if (!confirm('確定刪除此會議？這將同時刪除相關的逐字稿和摘要。')) return
+  try {
+    await api('DELETE', `/meetings/${meetingId}`)
+    selectedMeeting = null
+    await renderMeetings()
+  } catch(e) { alert(e.message) }
+}
+
+// ── Prompts Tab ────────────────────────────────────────────────────────────
+async function renderPrompts() {
+  const el = document.getElementById('tab-prompts')
+  el.innerHTML = '<div class="empty">載入中...</div>'
+  try {
+    const prompts = await api('GET', '/prompts')
+    el.innerHTML = `
+      <div class="row" style="margin-bottom:16px">
+        <span style="font-size:16px;font-weight:700;flex:1">Prompt 模板</span>
+        <button class="btn btn-primary" onclick="openCreatePrompt()">+ 新增自訂</button>
+      </div>
+      <div class="section-title" style="margin-bottom:8px">內建場景</div>
+      ${prompts.filter(p=>p.is_builtin).map(p => `
+        <div class="prompt-card">
+          <h3>${p.name}</h3>
+          <div class="scene">${p.scene}</div>
+          <div class="pre" style="max-height:100px;font-size:12px">${p.system_prompt}</div>
+        </div>`).join('')}
+      <div class="section-title" style="margin:16px 0 8px">自訂場景</div>
+      <div id="custom-prompts">
+        ${prompts.filter(p=>!p.is_builtin).length ? prompts.filter(p=>!p.is_builtin).map(p => renderPromptCard(p)).join('') : '<div class="empty">尚無自訂場景</div>'}
+      </div>
+    `
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>` }
+}
+
+function renderPromptCard(p) {
+  return `
+    <div class="prompt-card" id="prompt-${p.id}">
+      <div class="row" style="margin-bottom:4px">
+        <h3 style="flex:1">${p.name}</h3>
+        <button class="btn btn-outline btn-sm" onclick="openEditPrompt(${JSON.stringify(p).replace(/"/g,'&quot;')})">編輯</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePrompt('${p.id}')">刪除</button>
+      </div>
+      <div class="pre" style="max-height:120px;font-size:12px">${p.system_prompt}</div>
+    </div>`
+}
+
+function openCreatePrompt() {
+  modal(`
+    <h2>新增自訂 Prompt</h2>
+    <div class="form-group"><label>名稱</label><input id="p-name" placeholder="例：技術週會"></div>
+    <div class="form-group"><label>System Prompt</label><textarea id="p-prompt" style="min-height:160px" placeholder="你是..."></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="createPrompt()">建立</button>
+    </div>
+  `)
+}
+
+async function createPrompt() {
+  const name = document.getElementById('p-name').value.trim()
+  const system_prompt = document.getElementById('p-prompt').value.trim()
+  if (!name || !system_prompt) return alert('請填寫名稱和 Prompt')
+  try {
+    await api('POST', '/prompts', { name, system_prompt })
+    document.querySelector('.modal-overlay')?.remove()
+    renderPrompts()
+  } catch(e) { alert(e.message) }
+}
+
+function openEditPrompt(p) {
+  modal(`
+    <h2>編輯 Prompt</h2>
+    <div class="form-group"><label>名稱</label><input id="ep-name" value="${p.name}"></div>
+    <div class="form-group"><label>System Prompt</label><textarea id="ep-prompt" style="min-height:160px">${p.system_prompt}</textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="updatePrompt('${p.id}')">儲存</button>
+    </div>
+  `)
+}
+
+async function updatePrompt(promptId) {
+  const name = document.getElementById('ep-name').value.trim()
+  const system_prompt = document.getElementById('ep-prompt').value.trim()
+  try {
+    await api('PUT', `/prompts/${promptId}`, { name, system_prompt })
+    document.querySelector('.modal-overlay')?.remove()
+    renderPrompts()
+  } catch(e) { alert(e.message) }
+}
+
+async function deletePrompt(promptId) {
+  if (!confirm('確定刪除此 Prompt？')) return
+  try {
+    await api('DELETE', `/prompts/${promptId}`)
+    renderPrompts()
+  } catch(e) { alert(e.message) }
+}
+
+// ── Aggregations Tab ───────────────────────────────────────────────────────
+async function renderAggregations() {
+  const el = document.getElementById('tab-aggregations')
+  el.innerHTML = '<div class="empty">載入中...</div>'
+  try {
+    const [meetings, aggs] = await Promise.all([
+      api('GET', '/meetings'),
+      api('GET', '/documents/aggregations'),
+    ])
+    el.innerHTML = `
+      <div style="display:flex;gap:24px">
+        <div style="flex:1">
+          <div class="row" style="margin-bottom:12px">
+            <span style="font-size:16px;font-weight:700;flex:1">跨會議聚合</span>
+          </div>
+          <div class="card">
+            <div class="section-title" style="margin-bottom:10px">選擇會議（至少 2 場）</div>
+            ${meetings.map(m => `
+              <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer">
+                <input type="checkbox" value="${m.id}" class="agg-meeting-cb">
+                <span>${m.title} <small style="color:var(--muted)">${m.date}</small></span>
+              </label>`).join('')}
+            <hr class="divider">
+            <button class="btn btn-primary" onclick="startAggregation()">開始聚合</button>
+            <div id="agg-task-status"></div>
+          </div>
+        </div>
+        <div style="flex:2">
+          <div class="section-title" style="margin-bottom:10px">聚合結果（${aggs.length}）</div>
+          ${aggs.length ? aggs.map(a => {
+            const cacheKey = `agg_${a.id}`
+            _dlCache[cacheKey] = { content: a.content, filename: `aggregation_${a.created_at.slice(0,10)}.md` }
+            return `
+            <div class="card" style="margin-bottom:12px">
+              <div class="row" style="margin-bottom:6px">
+                <small style="color:var(--muted);flex:1">${a.created_at.slice(0,19).replace('T',' ')} · 來源：${a.source_meeting_ids.length} 場會議</small>
+                <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
+              </div>
+              <div class="pre">${a.content}</div>
+            </div>`
+          }).join('') : '<div class="empty">尚無聚合結果</div>'}
+        </div>
+      </div>
+    `
+  } catch(e) { el.innerHTML = `<div class="empty">${e.message}</div>` }
+}
+
+async function startAggregation() {
+  const ids = [...document.querySelectorAll('.agg-meeting-cb:checked')].map(c => c.value)
+  if (ids.length < 2) return alert('請至少選擇 2 場會議')
+  const cfg = getCfg()
+  const body = { meeting_ids: ids }
+  if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
+  if (cfg.llm_model) body.llm_model = cfg.llm_model
+  if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key
+  try {
+    const res = await api('POST', '/documents/aggregate', body)
+    const el = document.getElementById('agg-task-status')
+    el.innerHTML = `<div class="task-bar" style="margin-top:8px">聚合中 <span id="agg-status">${badge('pending')}</span></div>`
+    watchTask(res.task_id, task => {
+      document.getElementById('agg-status').innerHTML = badge(task.status)
+      if (task.status === 'done') renderAggregations()
+    })
+  } catch(e) { alert(e.message) }
+}
+
+// ── Download ───────────────────────────────────────────────────────────────
+const _dlCache = {}
+
+function downloadContent(content, filename) {
+  const safe = filename.replace(/[/\\?%*:|"<>]/g, '_')
+  const blob = new Blob([content], { type: 'text/markdown; charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = safe
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function downloadCached(key) {
+  const entry = _dlCache[key]
+  if (!entry) return
+  downloadContent(entry.content, entry.filename)
+}
+
+// ── Settings Tab ───────────────────────────────────────────────────────────
+function _refreshModelDatalist(models) {
+  const dl = document.getElementById('llm-models-list')
+  if (!dl) return
+  dl.innerHTML = models.map(m => `<option value="${m}">`).join('')
+}
+
+function _infoRow(label, serverVal, overrideVal) {
+  const mono = 'background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:12px;font-family:monospace;word-break:break-all'
+  const badge = '<span style="margin-left:6px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">覆蓋中</span>'
+  const muted = 'font-size:11px;color:var(--muted);margin-top:4px'
+  let html = `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${label}</div>`
+  if (overrideVal) {
+    html += `<div><span style="${mono}">${overrideVal}</span>${badge}</div>`
+    if (serverVal) html += `<div style="${muted}">伺服器預設：${serverVal}</div>`
+  } else {
+    html += `<span style="${mono}">${serverVal ?? '—'}</span>`
+  }
+  return `<div>${html}</div>`
+}
+
+async function renderSettings() {
+  const el = document.getElementById('tab-settings')
+  let serverInfo = null
+  try { serverInfo = await api('GET', '/info') } catch(_) {}
+
+  const ovSttUrl   = localStorage.getItem('cfg_stt_url')   || ''
+  const ovLlmUrl   = localStorage.getItem('cfg_llm_url')   || ''
+  const ovLlmModel = localStorage.getItem('cfg_llm_model') || ''
+  const ovLlmKey   = localStorage.getItem('cfg_llm_key')   || ''
+  const cachedModels = JSON.parse(localStorage.getItem('cfg_llm_available_models') || '[]')
+
+  el.innerHTML = `
+    <div style="max-width:520px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:20px">服務設定</div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:14px">目前生效設定</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          ${_infoRow('STT Model', serverInfo?.stt_model, null)}
+          ${_infoRow('STT URL', serverInfo?.stt_service_url, ovSttUrl)}
+          ${_infoRow('LLM Model', serverInfo?.llm_model, ovLlmModel)}
+          ${_infoRow('LLM Base URL', serverInfo?.llm_base_url || '（未設定）', ovLlmUrl)}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">STT 服務覆蓋（選填）</div>
+        <div class="form-group">
+          <label>STT 服務 URL</label>
+          <div style="display:flex;gap:6px">
+            <input id="cfg-stt-url" placeholder="http://localhost:8080" value="${ovSttUrl}" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="probeField('stt')">測試</button>
+          </div>
+          <div id="probe-stt-msg" style="font-size:11px;margin-top:4px"></div>
+          <small style="color:var(--muted);font-size:11px">留空使用伺服器預設值</small>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="section-title" style="margin-bottom:12px">LLM 服務覆蓋（選填）</div>
+        <div class="form-group">
+          <label>LLM Base URL</label>
+          <div style="display:flex;gap:6px">
+            <input id="cfg-llm-url" placeholder="http://localhost:11434" value="${ovLlmUrl}" style="flex:1">
+            <button class="btn btn-outline btn-sm" onclick="probeField('llm')">測試</button>
+          </div>
+          <div id="probe-llm-msg" style="font-size:11px;margin-top:4px"></div>
+          <small style="color:var(--muted);font-size:11px">留空使用伺服器預設</small>
+        </div>
+        <div class="form-group">
+          <label>LLM Model</label>
+          <input id="cfg-llm-model" list="llm-models-list" placeholder="gpt-4o / ollama/llama3.2" value="${ovLlmModel}">
+          <datalist id="llm-models-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <input id="cfg-llm-key" type="password" placeholder="sk-..." value="${ovLlmKey}">
+        </div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
+        <button class="btn btn-outline" onclick="clearSettings()">清除設定</button>
+      </div>
+      <div id="settings-msg" style="margin-top:10px;font-size:13px"></div>
+    </div>
+  `
+  if (cachedModels.length) _refreshModelDatalist(cachedModels)
+}
+
+async function probeField(type) {
+  const msgEl = document.getElementById(`probe-${type}-msg`)
+  msgEl.style.color = 'var(--muted)'
+  msgEl.textContent = '測試中…'
+  try {
+    let result
+    if (type === 'stt') {
+      const url = document.getElementById('cfg-stt-url').value.trim()
+      if (!url) { msgEl.textContent = '請先輸入 URL'; return }
+      result = await api('GET', `/probe/stt?url=${encodeURIComponent(url)}`)
+    } else {
+      const url = document.getElementById('cfg-llm-url').value.trim()
+      const key = document.getElementById('cfg-llm-key').value.trim()
+      if (!url) { msgEl.textContent = '請先輸入 URL'; return }
+      const qs = `/probe/llm?url=${encodeURIComponent(url)}${key ? '&api_key=' + encodeURIComponent(key) : ''}`
+      result = await api('GET', qs)
+    }
+    if (result.ok) {
+      msgEl.style.color = 'var(--success)'
+      const models = result.models || []
+      msgEl.textContent = models.length
+        ? `✓ 連線正常 · ${models.length} 個模型：${models.join(', ')}`
+        : '✓ 連線正常'
+      // cache model list for the model input datalist
+      if (models.length) {
+        localStorage.setItem('cfg_llm_available_models', JSON.stringify(models))
+        _refreshModelDatalist(models)
+      }
+    } else {
+      msgEl.style.color = 'var(--danger)'
+      msgEl.textContent = `✗ ${result.detail}`
+    }
+  } catch(e) {
+    msgEl.style.color = 'var(--danger)'
+    msgEl.textContent = `✗ ${e.message}`
+  }
+}
+
+async function saveSettings() {
+  const sttUrl   = document.getElementById('cfg-stt-url').value.trim()
+  const llmUrl   = document.getElementById('cfg-llm-url').value.trim()
+  const llmModel = document.getElementById('cfg-llm-model').value.trim()
+  const llmKey   = document.getElementById('cfg-llm-key').value.trim()
+  const msgEl    = document.getElementById('settings-msg')
+
+  // Probe non-empty URLs before saving
+  const probes = []
+  if (sttUrl)  probes.push(api('GET', `/probe/stt?url=${encodeURIComponent(sttUrl)}`).then(r => ({ type: 'STT', ...r })))
+  if (llmUrl)  probes.push(api('GET', `/probe/llm?url=${encodeURIComponent(llmUrl)}${llmKey ? '&api_key=' + encodeURIComponent(llmKey) : ''}`).then(r => ({ type: 'LLM', ...r })))
+
+  if (probes.length) {
+    msgEl.style.color = 'var(--muted)'
+    msgEl.textContent = '驗證連線中…'
+    const results = await Promise.all(probes)
+    const failed  = results.filter(r => !r.ok)
+    if (failed.length) {
+      msgEl.style.color = 'var(--danger)'
+      msgEl.textContent = failed.map(r => `✗ ${r.type}: ${r.detail}`).join('  ')
+      return
+    }
+  }
+
+  localStorage.setItem('cfg_stt_url',   sttUrl)
+  localStorage.setItem('cfg_llm_url',   llmUrl)
+  localStorage.setItem('cfg_llm_model', llmModel)
+  localStorage.setItem('cfg_llm_key',   llmKey)
+  await renderSettings()
+  const m = document.getElementById('settings-msg')
+  if (m) {
+    m.style.color = 'var(--success)'
+    m.textContent = '✓ 已儲存'
+    setTimeout(() => { if (m) m.textContent = '' }, 2000)
+  }
+}
+
+function clearSettings() {
+  ['cfg_stt_url','cfg_llm_url','cfg_llm_model','cfg_llm_key','cfg_llm_available_models'].forEach(k => localStorage.removeItem(k))
+  renderSettings()
+}
+
+// Init
+renderMeetings()
+</script>
+</body>
+</html>

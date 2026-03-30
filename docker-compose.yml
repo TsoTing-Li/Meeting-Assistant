@@ -1,0 +1,83 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  stt_service:
+    build:
+      context: .
+      dockerfile: docker/stt_service.Dockerfile
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      STT_MODEL: ${STT_MODEL:-large-v3}
+      STT_DEVICE: ${STT_DEVICE:-cuda}
+      STT_COMPUTE_TYPE: ${STT_COMPUTE_TYPE:-float16}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3.11", "-c", "import httpx; httpx.get('http://localhost:8080/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite:////app/data/meeting_assistant.db
+      LOCAL_STORAGE_PATH: /app/data/storage
+      STT_SERVICE_URL: http://stt_service:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      stt_service:
+        condition: service_healthy
+
+  task_worker:
+    build:
+      context: .
+      dockerfile: docker/task_worker.Dockerfile
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite:////app/data/meeting_assistant.db
+      LOCAL_STORAGE_PATH: /app/data/storage
+      STT_SERVICE_URL: http://stt_service:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      stt_service:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  data:

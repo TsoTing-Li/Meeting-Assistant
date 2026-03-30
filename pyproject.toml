@@ -1,0 +1,61 @@
+[project]
+name = "meeting-assistant"
+version = "0.1.0"
+description = "AI-powered meeting assistant for transcription, correction, and summarization"
+requires-python = ">=3.11"
+dependencies = [
+    "faster-whisper>=1.0.0",
+    "litellm>=1.40.0",
+"sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1.0",
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+    "click>=8.1.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+cli = [
+    "httpx>=0.27.0",
+    "litellm>=1.40.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.27.0",
+    "anyio>=4.0.0",
+]
+
+[project.scripts]
+meeting-assistant = "cli.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["core"]
+omit = ["tests/*"]
