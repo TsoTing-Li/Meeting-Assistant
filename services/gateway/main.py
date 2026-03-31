@@ -78,9 +78,13 @@ async def probe_llm(url: str = Query(...), api_key: Optional[str] = Query(None))
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+    # Normalize: strip trailing /v1 so we always append /v1/models once
+    base = url.rstrip('/')
+    if base.endswith('/v1'):
+        base = base[:-3]
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.get(url.rstrip('/') + "/v1/models", headers=headers)
+            r = await client.get(base + "/v1/models", headers=headers)
         if r.status_code == 200:
             body = r.json()
             models = [m["id"] for m in body.get("data", [])]
