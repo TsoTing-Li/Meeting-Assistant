@@ -16,12 +16,13 @@ def _strip_think_tags(text: str) -> str:
 class LiteLLMClient(BaseLLM):
     """
     LLM client using LiteLLM. Supports:
-    - OpenAI: model="gpt-4o", api_key=...
-    - Ollama: model="ollama/llama3.2", api_base="http://localhost:11434"
-    - vLLM / any OpenAI-compatible: model="openai/Qwen/Qwen3-4B", api_base="http://host/v1"
+    - OpenAI cloud: model="gpt-4o", api_key=...
     - Anthropic: model="anthropic/claude-sonnet-4-6", api_key=...
+    - Ollama: model="qwen3:4b", api_base="http://localhost:11434"
+    - vLLM / OpenAI-compatible: model="Qwen/Qwen3-4B", api_base="http://host:8002/v1"
 
-    The model name is used as-is. Include the provider prefix if required by LiteLLM.
+    When api_base is set, /v1 is appended automatically if missing, and
+    custom_llm_provider="openai" is used so no provider prefix is needed in the model name.
     """
 
     def __init__(
@@ -50,18 +51,12 @@ class LiteLLMClient(BaseLLM):
             if self.api_key:
                 call_kwargs["api_key"] = self.api_key
             if self.api_base:
-                call_kwargs["api_base"] = self.api_base
-                # When api_base is set, force OpenAI-compatible routing so LiteLLM
-                # doesn't require a provider prefix in the model name.
-                call_kwargs.setdefault("custom_llm_provider", "openai")
-            import json, pprint
-            print("=== LLM REQUEST ===")
-            debug = {k: v for k, v in call_kwargs.items() if k != "messages"}
-            pprint.pprint(debug)
-            for i, msg in enumerate(call_kwargs["messages"]):
-                print(f"[{i}] role={msg['role']}, len={len(msg['content'])}")
-                print(msg["content"][:500] + ("..." if len(msg["content"]) > 500 else ""))
-            print("===================")
+                # Ensure api_base ends with /v1 for OpenAI-compatible endpoints
+                api_base = self.api_base.rstrip('/')
+                if not api_base.endswith('/v1'):
+                    api_base += '/v1'
+                call_kwargs["api_base"] = api_base
+                call_kwargs["custom_llm_provider"] = "openai"
             response = completion(**call_kwargs)
             raw_content = response.choices[0].message.content or ""
             return LLMResponse(
