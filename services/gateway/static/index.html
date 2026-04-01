@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meeting Assistant</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -71,6 +72,15 @@
   .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 32px; }
   .pre { white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6; background: var(--bg); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); max-height: 400px; overflow-y: auto; }
+  .md-body { font-size: 14px; line-height: 1.75; background: var(--bg); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border); max-height: 500px; overflow-y: auto; }
+  .md-body h1,.md-body h2,.md-body h3 { font-weight: 700; margin: 14px 0 6px; }
+  .md-body h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .md-body h3 { font-size: 14px; }
+  .md-body ul,.md-body ol { padding-left: 20px; margin: 6px 0; }
+  .md-body li { margin: 3px 0; }
+  .md-body p { margin: 6px 0; }
+  .md-body code { background: #e5e7eb; border-radius: 3px; padding: 1px 4px; font-size: 12px; }
+  .md-body input[type=checkbox] { margin-right: 4px; }
   .task-bar { padding: 8px 12px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
   .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
@@ -473,7 +483,7 @@ async function renderSummaryTab(meetingId) {
             <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
             <button class="btn btn-danger btn-sm" onclick="deleteSummary('${meetingId}','${s.id}')">刪除</button>
           </div>
-          <div class="pre">${s.content}</div>
+          <div class="md-body">${marked.parse(s.content)}</div>
         </div>`
       }).join('') : '<div class="empty">尚無摘要</div>'}
     `
