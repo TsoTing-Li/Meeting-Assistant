@@ -12,12 +12,38 @@ def _strip_think_tags(text: str) -> str:
     return _THINK_TAG_RE.sub("", text).strip()
 
 
+# Known LiteLLM provider prefixes — anything else with an api_base gets openai/ prepended
+_KNOWN_PROVIDERS = {
+    "openai", "ollama", "anthropic", "azure", "huggingface", "cohere",
+    "replicate", "together_ai", "openrouter", "vertex_ai", "palm",
+    "ai21", "baseten", "vllm", "hosted_vllm", "deepinfra", "perplexity",
+    "anyscale", "mistral", "groq", "bedrock", "sagemaker", "petals",
+}
+
+
+def _resolve_model(model: str, api_base: str) -> str:
+    """
+    If api_base is set and the model has no recognized provider prefix,
+    prepend 'openai/' so LiteLLM routes to the OpenAI-compatible endpoint.
+    """
+    if not api_base:
+        return model
+    prefix = model.split("/")[0]
+    if prefix not in _KNOWN_PROVIDERS:
+        return f"openai/{model}"
+    return model
+
+
 class LiteLLMClient(BaseLLM):
     """
     LLM client using LiteLLM. Supports:
     - OpenAI: model="gpt-4o", api_key=...
     - Ollama: model="ollama/llama3.2", api_base="http://localhost:11434"
-    - Anthropic: model="claude-sonnet-4-6", api_key=...
+    - vLLM / any OpenAI-compatible: model="openai/Qwen/Qwen3-4B", api_base="http://host/v1"
+    - Anthropic: model="anthropic/claude-sonnet-4-6", api_key=...
+
+    If api_base is set and model has no recognized provider prefix,
+    'openai/' is prepended automatically.
     """
 
     def __init__(
@@ -28,7 +54,7 @@ class LiteLLMClient(BaseLLM):
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> None:
-        self.model = model
+        self.model = _resolve_model(model, api_base)
         self.api_key = api_key or None
         self.api_base = api_base or None
         self.temperature = temperature
