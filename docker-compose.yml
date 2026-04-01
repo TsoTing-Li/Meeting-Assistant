@@ -22,6 +22,7 @@ services:
       STT_MODEL: ${STT_MODEL:-large-v3}
       STT_DEVICE: ${STT_DEVICE:-cuda}
       STT_COMPUTE_TYPE: ${STT_COMPUTE_TYPE:-float16}
+      STT_WORKERS: ${STT_WORKERS:-1}
     deploy:
       resources:
         reservations:
@@ -55,10 +56,10 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      stt_service:
-        condition: service_healthy
+      # stt_service:
+      #   condition: service_healthy
 
-  task_worker:
+  task_worker_stt:
     build:
       context: .
       dockerfile: docker/task_worker.Dockerfile
@@ -70,12 +71,32 @@ services:
       DATABASE_URL: sqlite:////app/data/meeting_assistant.db
       LOCAL_STORAGE_PATH: /app/data/storage
       STT_SERVICE_URL: http://stt_service:8080
+      CELERY_QUEUES: stt
+      CELERY_CONCURRENCY: ${STT_CONCURRENCY:-2}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
-      stt_service:
+
+  task_worker_llm:
+    build:
+      context: .
+      dockerfile: docker/task_worker.Dockerfile
+    volumes:
+      - ./data:/app/data
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite:////app/data/meeting_assistant.db
+      LOCAL_STORAGE_PATH: /app/data/storage
+      STT_SERVICE_URL: http://stt_service:8080
+      CELERY_QUEUES: llm
+      CELERY_CONCURRENCY: ${LLM_CONCURRENCY:-4}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
         condition: service_healthy
 
 volumes:

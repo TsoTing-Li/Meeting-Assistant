@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     stt_model: str = "large-v3"
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
+    stt_workers: int = 1  # number of concurrent model instances
 
     # Service URLs (used when running in Docker; services call each other)
     stt_service_url: str = "http://localhost:8080"

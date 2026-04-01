@@ -1,3 +1,4 @@
+import asyncio
 import tempfile
 import os
 from contextlib import asynccontextmanager
@@ -10,15 +11,19 @@ from core.stt.base import STTResult, TranscriptSegment
 from core.exceptions import STTError
 
 
-_stt: FasterWhisperSTT | None = None
+# Pool of model instances — each handles one transcription at a time
+_pool: asyncio.Queue = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _stt
-    _stt = FasterWhisperSTT.from_settings()
-    # Eagerly load model at startup
-    _stt._load_model()
+    global _pool
+    from core.config import settings
+    _pool = asyncio.Queue()
+    for _ in range(settings.stt_workers):
+        instance = FasterWhisperSTT.from_settings()
+        instance._load_model()
+        await _pool.put(instance)
     yield
 
 
@@ -40,8 +45,9 @@ class TranscribeResponse(BaseModel):
 
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "model_loaded": _stt is not None and _stt._model is not None}
+async def health():
+    loaded = _pool is not None and not _pool.empty()
+    return {"status": "ok", "model_loaded": loaded}
 
 
 @app.post("/transcribe", response_model=TranscribeResponse)
@@ -49,7 +55,7 @@ async def transcribe(
     audio: UploadFile = File(...),
     language: str = Form(default="zh"),
 ):
-    if _stt is None:
+    if _pool is None:
         raise HTTPException(status_code=503, detail="STT model not loaded")
 
     data = await audio.read()
@@ -59,11 +65,14 @@ async def transcribe(
         tmp.write(data)
         tmp_path = tmp.name
 
+    # Acquire a model instance from the pool (waits if all are busy)
+    stt = await _pool.get()
     try:
-        result = _stt.transcribe(tmp_path, language=language)
+        result: STTResult = await asyncio.to_thread(stt.transcribe, tmp_path, language)
     except STTError as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        await _pool.put(stt)  # always return instance to pool
         os.unlink(tmp_path)
 
     return TranscribeResponse(

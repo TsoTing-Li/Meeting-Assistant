@@ -12,7 +12,12 @@ services:
       - ./services:/app/services
       - ./cli:/app/cli
 
-  task_worker:
+  task_worker_stt:
+    volumes:
+      - ./core:/app/core
+      - ./services:/app/services
+
+  task_worker_llm:
     volumes:
       - ./core:/app/core
       - ./services:/app/services
