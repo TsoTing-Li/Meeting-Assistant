@@ -420,16 +420,28 @@ async function renderSummaryTab(meetingId) {
   const el = document.getElementById('inner-summary')
   el.innerHTML = '<div class="empty">載入中...</div>'
   try {
-    const [summaries, prompts] = await Promise.all([
+    const [summaries, prompts, transcript] = await Promise.all([
       api('GET', `/meetings/${meetingId}/summaries`),
       api('GET', '/prompts'),
+      api('GET', `/meetings/${meetingId}/transcript`).catch(() => null),
     ])
     const customPrompts = prompts.filter(p => !p.is_builtin)
     const builtinScenes = prompts.filter(p => p.is_builtin)
+    const hasCorrected = !!(transcript && transcript.corrected)
 
     el.innerHTML = `
       <div class="card">
         <div class="section-title" style="margin-bottom:12px">生成摘要</div>
+        <div class="form-group"><label>逐字稿來源</label>
+          <div style="display:flex;gap:16px;padding:4px 0">
+            <label style="text-transform:none;letter-spacing:0;font-weight:400;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;width:auto;${hasCorrected ? '' : 'opacity:0.4;cursor:not-allowed'}">
+              <input type="radio" name="sum-source" value="corrected" ${hasCorrected ? 'checked' : 'disabled'} style="width:auto"> 校正後
+            </label>
+            <label style="text-transform:none;letter-spacing:0;font-weight:400;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;width:auto">
+              <input type="radio" name="sum-source" value="raw" ${hasCorrected ? '' : 'checked'} style="width:auto"> 原始逐字稿
+            </label>
+          </div>
+        </div>
         <div class="form-group"><label>場景</label>
           <select id="sum-scene">
             ${builtinScenes.map(p => `<option value="${p.scene}">${p.name}</option>`).join('')}
@@ -475,8 +487,9 @@ async function startSummary(meetingId) {
   const promptId = document.getElementById('sum-prompt-id').value || null
   const participants = document.getElementById('sum-participants').value.split(',').map(s=>s.trim()).filter(Boolean)
   const topics = document.getElementById('sum-topics').value.split(',').map(s=>s.trim()).filter(Boolean)
+  const useCorrected = document.querySelector('input[name="sum-source"]:checked').value === 'corrected'
   const cfg = getCfg()
-  const body = { scene, prompt_id: promptId, participants, topics }
+  const body = { scene, prompt_id: promptId, participants, topics, use_corrected: useCorrected }
   if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
   if (cfg.llm_model) body.llm_model = cfg.llm_model
   if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key
