@@ -42,7 +42,8 @@ Long-running operations (STT, correction, summarization) run asynchronously via 
 |-----------|------|------|
 | `gateway` | 8000 | FastAPI REST API + Web UI (`GET /`) |
 | `stt_service` | 8080 | faster-whisper HTTP server (GPU) |
-| `task_worker` | — | Celery worker |
+| `task_worker_stt` | — | Celery worker — STT queue |
+| `task_worker_llm` | — | Celery worker — LLM queue (correction / summary / aggregation) |
 | `redis` | 6379 | Celery broker |
 
 ## Quickstart

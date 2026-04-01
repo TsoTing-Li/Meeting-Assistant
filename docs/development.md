@@ -29,8 +29,11 @@ docker compose up redis -d
 # Start gateway (in one terminal)
 uvicorn services.gateway.main:app --reload --port 8000
 
-# Start task worker (in another terminal)
-celery -A services.task_worker.celery_app worker --loglevel=info
+# Start STT task worker (in another terminal)
+celery -A services.task_worker.celery_app worker -Q stt --concurrency=2 --loglevel=info
+
+# Start LLM task worker (in another terminal)
+celery -A services.task_worker.celery_app worker -Q llm --concurrency=4 --loglevel=info
 ```
 
 ### Start full stack
@@ -42,7 +45,7 @@ docker compose up -d --build
 # (docker-compose.override.yml mounts source dirs as volumes)
 
 # Rebuild after dependency or Dockerfile changes
-docker compose up -d --build gateway task_worker
+docker compose up -d --build gateway task_worker_stt task_worker_llm
 
 # STT service only (GPU machine, standalone)
 docker compose up --build stt_service
@@ -234,7 +237,7 @@ class S3Storage(BaseStorage):
 docker compose ps
 
 # Follow task worker logs
-docker compose logs -f task_worker
+docker compose logs -f task_worker_stt task_worker_llm
 
 # Follow STT service logs (includes model download progress)
 docker compose logs -f stt_service
@@ -243,10 +246,10 @@ docker compose logs -f stt_service
 docker exec -it meeting_assistant-gateway-1 bash
 
 # Manually trigger a Celery task (debugging)
-docker exec -it meeting_assistant-task_worker-1 \
+docker exec -it meeting_assistant-task_worker_llm-1 \
   celery -A services.task_worker.celery_app inspect active
 
 # Purge all Celery queues (clears stuck tasks)
-docker exec -it meeting_assistant-task_worker-1 \
+docker exec -it meeting_assistant-task_worker_llm-1 \
   celery -A services.task_worker.celery_app purge
 ```

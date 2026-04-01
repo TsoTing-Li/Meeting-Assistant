@@ -27,13 +27,13 @@ The central design principle is that **`core/` is a pure sync Python library wit
         │ Celery (Redis broker)
         ▼
 ┌──────────────────────────────────────────────────────────────┐
-│   task_worker                                                │
-│   Celery workers (sync)                                      │
-│   - run_stt        → HTTP → stt_service                     │
-│   - run_correction → LLM API (direct)                       │
-│   - run_summary    → LLM API (direct)                       │
-│   - run_aggregation→ LLM API (direct)                       │
-└───────┬─────────────────────────────────────────────────────┘
+│   task_worker_stt  (queue: stt,  concurrency = STT_CONCURRENCY)   │
+│   task_worker_llm  (queue: llm,  concurrency = LLM_CONCURRENCY)   │
+│   - stt queue:  run_stt        → HTTP → stt_service               │
+│   - llm queue:  run_correction → LLM API (direct)                 │
+│                 run_summary    → LLM API (direct)                  │
+│                 run_aggregation→ LLM API (direct)                  │
+└───────┬────────────────────────────────────────────────────────────┘
         │
         ├─── HTTP ──► stt_service (port 8080)  [faster-whisper, GPU]
         │
@@ -229,7 +229,7 @@ STT_COMPUTE_TYPE=float16    # recommended for Ampere+ GPUs (RTX 30xx/40xx)
 
 **Model cache:** The HuggingFace model cache (`~/.cache/huggingface`) is mounted into the container via `docker-compose.override.yml` so the model is only downloaded once.
 
-Only the `stt_service` needs GPU access. All other containers (`gateway`, `task_worker`, `redis`) remain unchanged.
+Only the `stt_service` needs GPU access. All other containers (`gateway`, `task_worker_stt`, `task_worker_llm`, `redis`) remain unchanged.
 
 ---
 
@@ -270,7 +270,8 @@ Each service in `docker-compose.yml` maps 1:1 to a Kubernetes `Deployment`:
 | Docker service | K8s notes |
 |----------------|-----------|
 | `gateway` | Standard Deployment |
-| `task_worker` | Scale replicas horizontally |
+| `task_worker_stt` | Scale replicas; keep concurrency ≤ STT_WORKERS per replica |
+| `task_worker_llm` | Scale replicas horizontally |
 | `stt_service` | 1 replica, GPU node selector required |
 | `redis` | Use managed Redis (ElastiCache, Cloud Memorystore) |
 | SQLite | Use managed PostgreSQL |
@@ -307,6 +308,6 @@ FastAPI's `BackgroundTasks` runs in the same process and dies with the server. C
 - Can be cancelled via `revoke`
 - Are retryable
 - Can be inspected and monitored
-- Scale independently (add more task_worker replicas)
+- Scale independently (add more task_worker_stt / task_worker_llm replicas)
 
 The trade-off is operational complexity (Redis required). For a simpler deployment, `BackgroundTasks` or `asyncio.create_task` would be sufficient if durability is not needed.
