@@ -51,6 +51,9 @@ class LiteLLMClient(BaseLLM):
                 call_kwargs["api_key"] = self.api_key
             if self.api_base:
                 call_kwargs["api_base"] = self.api_base
+                # When api_base is set, force OpenAI-compatible routing so LiteLLM
+                # doesn't require a provider prefix in the model name.
+                call_kwargs.setdefault("custom_llm_provider", "openai")
             import json, pprint
             print("=== LLM REQUEST ===")
             debug = {k: v for k, v in call_kwargs.items() if k != "messages"}
