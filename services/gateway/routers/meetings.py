@@ -114,6 +114,7 @@ class SummarizeRequest(BaseModel):
     topics: list[str] = []
     prompt_id: Optional[uuid.UUID] = None    # user-defined prompt, overrides scene
     custom_system_prompt: Optional[str] = None  # inline override, highest priority
+    extra_system_prompt: Optional[str] = None   # appended to base prompt (e.g. member roles)
     llm_base_url: Optional[str] = None
     llm_model: Optional[str] = None
     llm_api_key: Optional[str] = None
@@ -410,7 +411,8 @@ async def start_summary(
         args=[str(task.id), str(meeting_id), str(transcript.id), ref, payload.scene,
               payload.participants, payload.topics, payload.custom_system_prompt,
               str(payload.prompt_id) if payload.prompt_id else None,
-              payload.llm_base_url, payload.llm_model, payload.llm_api_key],
+              payload.llm_base_url, payload.llm_model, payload.llm_api_key,
+              payload.extra_system_prompt],
     )
     task.celery_task_id = celery_result.id
     await db.commit()

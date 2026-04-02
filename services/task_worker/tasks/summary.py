@@ -29,6 +29,7 @@ def run_summary(
     llm_base_url: Optional[str] = None,
     llm_model: Optional[str] = None,
     llm_api_key: Optional[str] = None,
+    extra_system_prompt: str | None = None,
 ):
     _task_id = uuid.UUID(task_id)
     _meeting_id = uuid.UUID(meeting_id)
@@ -65,6 +66,10 @@ def run_summary(
                 db_prompt = session.get(SystemPrompt, uuid.UUID(prompt_id))
                 if db_prompt:
                     resolved_system_prompt = db_prompt.template
+
+        if extra_system_prompt:
+            base = resolved_system_prompt or template.system_prompt
+            resolved_system_prompt = f"{base}\n\n{extra_system_prompt}"
 
         content = summarizer.summarize(transcript_text, template, ctx, system_prompt=resolved_system_prompt)
 
