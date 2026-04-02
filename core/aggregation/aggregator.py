@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from core.llm.base import BaseLLM
 from core.exceptions import AggregationError
 
-AGGREGATION_SYSTEM_PROMPT = """你是一位專業的專案管理助手，負責彙整多場會議的摘要，呈現整體進展。
+AGGREGATION_SYSTEM_PROMPT = """你是一位專業的專案管理助手，負責彙整多場會議的摘要，呈現整體進展。請使用繁體中文回覆。
 
 請根據提供的多場會議摘要，生成跨會議彙整報告，包含以下區塊：
 
@@ -45,6 +45,8 @@ class MeetingAggregator:
         summaries: list[str],
         meeting_ids: list | None = None,
         meeting_labels: list[str] | None = None,
+        system_prompt: str | None = None,
+        extra_system_prompt: str | None = None,
     ) -> AggregationResult:
         """
         Aggregate multiple meeting summaries.
@@ -65,9 +67,13 @@ class MeetingAggregator:
             for label, summary in zip(labels, summaries)
         )
 
+        base_prompt = system_prompt or AGGREGATION_SYSTEM_PROMPT
+        if extra_system_prompt:
+            base_prompt = f"{base_prompt}\n\n{extra_system_prompt}"
+
         try:
             content = self.llm.chat(
-                system_prompt=AGGREGATION_SYSTEM_PROMPT,
+                system_prompt=base_prompt,
                 user_message=AGGREGATION_USER_PROMPT.format(
                     count=len(summaries),
                     summaries_block=summaries_block,

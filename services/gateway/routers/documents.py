@@ -23,6 +23,8 @@ class AggregateRequest(BaseModel):
     llm_base_url: str | None = None
     llm_model: str | None = None
     llm_api_key: str | None = None
+    prompt_id: uuid.UUID | None = None
+    extra_system_prompt: str | None = None
 
 
 class TaskQueuedResponse(BaseModel):
@@ -35,6 +37,7 @@ class AggregationResponse(BaseModel):
     source_meeting_ids: list[str]
     content: str
     created_at: str
+    prompt_id: Optional[uuid.UUID]
 
     @classmethod
     def from_orm(cls, s: Summary) -> "AggregationResponse":
@@ -43,6 +46,7 @@ class AggregationResponse(BaseModel):
             source_meeting_ids=s.source_meeting_ids,
             content=s.content,
             created_at=s.created_at.isoformat(),
+            prompt_id=s.prompt_id,
         )
 
 
@@ -65,7 +69,9 @@ async def start_aggregation(payload: AggregateRequest, db: AsyncSession = Depend
     celery_result = celery_app.send_task(
         "services.task_worker.tasks.aggregation.run_aggregation",
         args=[str(task.id), [str(mid) for mid in payload.meeting_ids], payload.labels,
-              payload.llm_base_url, payload.llm_model, payload.llm_api_key],
+              payload.llm_base_url, payload.llm_model, payload.llm_api_key,
+              str(payload.prompt_id) if payload.prompt_id else None,
+              payload.extra_system_prompt],
     )
     task.celery_task_id = celery_result.id
     await db.commit()
