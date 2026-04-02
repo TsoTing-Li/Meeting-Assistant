@@ -137,6 +137,11 @@ async function api(method, path, body, isForm) {
   return data
 }
 
+function fmtTime(iso) {
+  const s = iso.endsWith('Z') ? iso : iso + 'Z'
+  return new Date(s).toLocaleString('zh-TW', { hour12: false })
+}
+
 function badge(status) {
   return `<span class="badge badge-${status}">${status}</span>`
 }
@@ -479,7 +484,7 @@ async function renderSummaryTab(meetingId) {
         return `
         <div class="card" style="margin-bottom:10px">
           <div class="row" style="margin-bottom:8px">
-            <small style="color:var(--muted);flex:1">${s.created_at.slice(0,19).replace('T',' ')}</small>
+            <small style="color:var(--muted);flex:1">${fmtTime(s.created_at)}</small>
             <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
             <button class="btn btn-danger btn-sm" onclick="deleteSummary('${meetingId}','${s.id}')">刪除</button>
           </div>
@@ -534,7 +539,7 @@ async function renderTasksTab(meetingId) {
         <div class="task-bar" style="flex-wrap:wrap;gap:6px">
           <span style="font-weight:600">${t.task_type}</span>
           ${badge(t.status)}
-          <span style="color:var(--muted);font-size:11px;flex:1">${t.created_at.slice(0,19).replace('T',' ')}</span>
+          <span style="color:var(--muted);font-size:11px;flex:1">${fmtTime(t.created_at)}</span>
           ${['pending','running'].includes(t.status) ? `<button class="btn btn-danger btn-sm" onclick="cancelTask('${t.id}','${meetingId}')">取消</button>` : ''}
           ${t.error ? `<div style="width:100%;color:var(--danger);font-size:12px">${t.error}</div>` : ''}
         </div>`).join('') : '<div class="empty">尚無任務</div>'}
@@ -714,7 +719,7 @@ async function renderAggregations() {
             return `
             <div class="card" style="margin-bottom:12px">
               <div class="row" style="margin-bottom:6px">
-                <small style="color:var(--muted);flex:1">${a.created_at.slice(0,19).replace('T',' ')} · 來源：${a.source_meeting_ids.length} 場會議</small>
+                <small style="color:var(--muted);flex:1">${fmtTime(a.created_at)} · 來源：${a.source_meeting_ids.length} 場會議</small>
                 <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
               </div>
               <div class="pre">${a.content}</div>
