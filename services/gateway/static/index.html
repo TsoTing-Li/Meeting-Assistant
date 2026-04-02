@@ -457,22 +457,15 @@ async function renderSummaryTab(meetingId) {
             </label>
           </div>
         </div>
-        <div class="form-group"><label>場景</label>
-          <select id="sum-scene">
-            ${builtinScenes.map(p => `<option value="${p.scene}">${p.name}</option>`).join('')}
+        <div class="form-group"><label>Prompt</label>
+          <select id="sum-prompt">
+            ${builtinScenes.map(p => `<option value="scene:${p.scene}">${p.name}</option>`).join('')}
+            ${customPrompts.length ? `<option disabled>── 自訂 ──</option>` : ''}
+            ${customPrompts.map(p => `<option value="custom:${p.id}">${p.name}</option>`).join('')}
           </select>
         </div>
-        <div class="form-group"><label>自訂 Prompt（選填）</label>
-          <select id="sum-prompt-id">
-            <option value="">— 使用場景預設 —</option>
-            ${customPrompts.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>與會者（逗號分隔，選填）</label>
-          <input id="sum-participants" placeholder="Alice, Bob">
-        </div>
-        <div class="form-group"><label>議題（逗號分隔，選填）</label>
-          <input id="sum-topics" placeholder="進度更新, 問題討論">
+        <div class="form-group"><label>成員職責（選填）</label>
+          <textarea id="sum-extra-prompt" placeholder="支援 Markdown 格式，例如列出成員職責、會議背景等補充資訊" style="min-height:80px"></textarea>
         </div>
         <button class="btn btn-primary" onclick="startSummary('${meetingId}')">生成摘要</button>
         <div id="summary-task-status"></div>
@@ -498,13 +491,14 @@ async function renderSummaryTab(meetingId) {
 }
 
 async function startSummary(meetingId) {
-  const scene = document.getElementById('sum-scene').value
-  const promptId = document.getElementById('sum-prompt-id').value || null
-  const participants = document.getElementById('sum-participants').value.split(',').map(s=>s.trim()).filter(Boolean)
-  const topics = document.getElementById('sum-topics').value.split(',').map(s=>s.trim()).filter(Boolean)
+  const promptVal = document.getElementById('sum-prompt').value
+  const isCustom = promptVal.startsWith('custom:')
+  const scene = isCustom ? 'general' : promptVal.replace('scene:', '')
+  const promptId = isCustom ? promptVal.replace('custom:', '') : null
   const useCorrected = document.querySelector('input[name="sum-source"]:checked').value === 'corrected'
+  const extraPrompt = document.getElementById('sum-extra-prompt').value.trim() || null
   const cfg = getCfg()
-  const body = { scene, prompt_id: promptId, participants, topics, use_corrected: useCorrected }
+  const body = { scene, prompt_id: promptId, use_corrected: useCorrected, extra_system_prompt: extraPrompt }
   if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
   if (cfg.llm_model) body.llm_model = cfg.llm_model
   if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key
@@ -689,10 +683,14 @@ async function renderAggregations() {
   const el = document.getElementById('tab-aggregations')
   el.innerHTML = '<div class="empty">載入中...</div>'
   try {
-    const [meetings, aggs] = await Promise.all([
+    const [meetings, aggs, prompts] = await Promise.all([
       api('GET', '/meetings'),
       api('GET', '/documents/aggregations'),
+      api('GET', '/prompts'),
     ])
+    const customPrompts = prompts.filter(p => !p.is_builtin)
+    const meetingMap = Object.fromEntries(meetings.map(m => [m.id, m]))
+    const promptMap = Object.fromEntries(prompts.filter(p => p.id).map(p => [p.id, p.name]))
     el.innerHTML = `
       <div style="display:flex;gap:24px">
         <div style="flex:1">
@@ -707,6 +705,16 @@ async function renderAggregations() {
                 <span>${m.title} <small style="color:var(--muted)">${m.date}</small></span>
               </label>`).join('')}
             <hr class="divider">
+            <div class="form-group"><label>Prompt</label>
+              <select id="agg-prompt">
+                <option value="">跨會議聚合（預設）</option>
+                ${customPrompts.length ? `<option disabled>── 自訂 ──</option>` : ''}
+                ${customPrompts.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group"><label>補充說明（選填）</label>
+              <textarea id="agg-extra-prompt" placeholder="支援 Markdown 格式，例如成員職責、專案背景等" style="min-height:80px"></textarea>
+            </div>
             <button class="btn btn-primary" onclick="startAggregation()">開始聚合</button>
             <div id="agg-task-status"></div>
           </div>
@@ -718,11 +726,18 @@ async function renderAggregations() {
             _dlCache[cacheKey] = { content: a.content, filename: `aggregation_${a.created_at.slice(0,10)}.md` }
             return `
             <div class="card" style="margin-bottom:12px">
-              <div class="row" style="margin-bottom:6px">
-                <small style="color:var(--muted);flex:1">${fmtTime(a.created_at)} · 來源：${a.source_meeting_ids.length} 場會議</small>
+              <div class="row" style="margin-bottom:4px">
+                <small style="color:var(--muted);flex:1">${fmtTime(a.created_at)}</small>
+                <small style="color:var(--muted);margin-right:8px">Prompt：${a.prompt_id ? (promptMap[a.prompt_id] || a.prompt_id) : '跨會議聚合'}</small>
                 <button class="btn btn-outline btn-sm" onclick="downloadCached('${cacheKey}')">下載</button>
               </div>
-              <div class="pre">${a.content}</div>
+              <div style="margin-bottom:8px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px">
+                來源：${a.source_meeting_ids.map(id => {
+                  const m = meetingMap[id]
+                  return `<span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px">${m ? `${m.title} · ${m.date}` : id}</span>`
+                }).join('')}
+              </div>
+              <div class="md-body">${marked.parse(a.content)}</div>
             </div>`
           }).join('') : '<div class="empty">尚無聚合結果</div>'}
         </div>
@@ -734,8 +749,10 @@ async function renderAggregations() {
 async function startAggregation() {
   const ids = [...document.querySelectorAll('.agg-meeting-cb:checked')].map(c => c.value)
   if (ids.length < 2) return alert('請至少選擇 2 場會議')
+  const promptId = document.getElementById('agg-prompt').value || null
+  const extraPrompt = document.getElementById('agg-extra-prompt').value.trim() || null
   const cfg = getCfg()
-  const body = { meeting_ids: ids }
+  const body = { meeting_ids: ids, prompt_id: promptId, extra_system_prompt: extraPrompt }
   if (cfg.llm_base_url) body.llm_base_url = cfg.llm_base_url
   if (cfg.llm_model) body.llm_model = cfg.llm_model
   if (cfg.llm_api_key) body.llm_api_key = cfg.llm_api_key

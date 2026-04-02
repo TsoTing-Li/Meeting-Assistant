@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models.prompt import SystemPrompt, PromptScene
 from core.summary.templates import BUILTIN_TEMPLATES
+from core.aggregation.aggregator import AGGREGATION_SYSTEM_PROMPT
 from services.gateway.dependencies import get_db
 
 router = APIRouter()
@@ -47,6 +48,14 @@ async def list_prompts(db: AsyncSession = Depends(get_db)):
             is_builtin=True,
         )
         for t in BUILTIN_TEMPLATES.values()
+    ] + [
+        PromptTemplateResponse(
+            id=None,
+            scene="aggregation",
+            name="跨會議聚合",
+            system_prompt=AGGREGATION_SYSTEM_PROMPT,
+            is_builtin=True,
+        )
     ]
 
     result = await db.execute(select(SystemPrompt).order_by(SystemPrompt.created_at.asc()))
