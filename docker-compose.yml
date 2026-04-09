@@ -54,7 +54,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: sqlite:////app/data/meeting_assistant.db
       LOCAL_STORAGE_PATH: /app/data/storage
-      STT_SERVICE_URL: http://stt_service:8080
+      STT_SERVICE_URL: ${STT_SERVICE_URL:-http://stt_service:8080}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -75,7 +75,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: sqlite:////app/data/meeting_assistant.db
       LOCAL_STORAGE_PATH: /app/data/storage
-      STT_SERVICE_URL: http://stt_service:8080
+      STT_SERVICE_URL: ${STT_SERVICE_URL:-http://stt_service:8080}
       CELERY_QUEUES: stt
       CELERY_CONCURRENCY: ${STT_CONCURRENCY:-2}
     extra_hosts:
@@ -98,7 +98,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: sqlite:////app/data/meeting_assistant.db
       LOCAL_STORAGE_PATH: /app/data/storage
-      STT_SERVICE_URL: http://stt_service:8080
+      STT_SERVICE_URL: ${STT_SERVICE_URL:-http://stt_service:8080}
       CELERY_QUEUES: llm
       CELERY_CONCURRENCY: ${LLM_CONCURRENCY:-4}
     extra_hosts:
