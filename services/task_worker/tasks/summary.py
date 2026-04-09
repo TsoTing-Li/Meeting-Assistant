@@ -30,6 +30,8 @@ def run_summary(
     llm_model: Optional[str] = None,
     llm_api_key: Optional[str] = None,
     extra_system_prompt: str | None = None,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
 ):
     _task_id = uuid.UUID(task_id)
     _meeting_id = uuid.UUID(meeting_id)
@@ -40,6 +42,8 @@ def run_summary(
         model=llm_model or settings.llm_model,
         api_key=llm_api_key or settings.llm_api_key,
         api_base=llm_base_url or settings.llm_base_url,
+        temperature=temperature if temperature is not None else 0.0,
+        top_p=top_p,
     )
 
     with get_session() as session:

@@ -25,6 +25,8 @@ def run_correction(
     llm_base_url: Optional[str] = None,
     llm_model: Optional[str] = None,
     llm_api_key: Optional[str] = None,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
 ):
     """Correct a transcript using dictionary + LLM."""
     _task_id = uuid.UUID(task_id)
@@ -35,6 +37,8 @@ def run_correction(
         model=llm_model or settings.llm_model,
         api_key=llm_api_key or settings.llm_api_key,
         api_base=llm_base_url or settings.llm_base_url,
+        temperature=temperature if temperature is not None else 0.0,
+        top_p=top_p,
     )
 
     with get_session() as session:

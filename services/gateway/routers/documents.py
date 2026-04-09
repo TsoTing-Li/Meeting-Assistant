@@ -25,6 +25,8 @@ class AggregateRequest(BaseModel):
     llm_api_key: str | None = None
     prompt_id: uuid.UUID | None = None
     extra_system_prompt: str | None = None
+    temperature: float | None = None
+    top_p: float | None = None
 
 
 class TaskQueuedResponse(BaseModel):
@@ -71,7 +73,7 @@ async def start_aggregation(payload: AggregateRequest, db: AsyncSession = Depend
         args=[str(task.id), [str(mid) for mid in payload.meeting_ids], payload.labels,
               payload.llm_base_url, payload.llm_model, payload.llm_api_key,
               str(payload.prompt_id) if payload.prompt_id else None,
-              payload.extra_system_prompt],
+              payload.extra_system_prompt, payload.temperature, payload.top_p],
     )
     task.celery_task_id = celery_result.id
     await db.commit()

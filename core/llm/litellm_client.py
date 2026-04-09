@@ -2,6 +2,8 @@ import re
 import litellm
 from litellm import completion
 
+from typing import Optional
+
 from core.llm.base import BaseLLM, LLMMessage, LLMResponse
 from core.exceptions import LLMError
 
@@ -32,12 +34,14 @@ class LiteLLMClient(BaseLLM):
         api_base: str = "",
         temperature: float = 0.0,
         max_tokens: int = 4096,
+        top_p: Optional[float] = None,
     ) -> None:
         self.model = model
         self.api_key = api_key or None
         self.api_base = api_base or None
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.top_p = top_p
         litellm.drop_params = True
 
     def complete(self, messages: list[LLMMessage], **kwargs) -> LLMResponse:
@@ -48,6 +52,8 @@ class LiteLLMClient(BaseLLM):
                 "temperature": kwargs.get("temperature", self.temperature),
                 "max_completion_tokens": kwargs.get("max_tokens", self.max_tokens),
             }
+            if self.top_p is not None:
+                call_kwargs["top_p"] = self.top_p
             if self.api_key:
                 call_kwargs["api_key"] = self.api_key
             if self.api_base:
