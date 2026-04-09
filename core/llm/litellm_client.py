@@ -30,7 +30,7 @@ class LiteLLMClient(BaseLLM):
         model: str,
         api_key: str = "",
         api_base: str = "",
-        temperature: float = 0.3,
+        temperature: float = 0.0,
         max_tokens: int = 4096,
     ) -> None:
         self.model = model
@@ -46,7 +46,6 @@ class LiteLLMClient(BaseLLM):
                 "model": self.model,
                 "messages": [{"role": m.role, "content": m.content} for m in messages],
                 "temperature": kwargs.get("temperature", self.temperature),
-                "max_tokens": kwargs.get("max_tokens", self.max_tokens),
                 "max_completion_tokens": kwargs.get("max_tokens", self.max_tokens),
             }
             if self.api_key:
